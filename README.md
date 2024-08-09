@@ -12,7 +12,7 @@ Put `vplit.sh` in your PATH and make it executable.
 
 ```bash
 chmod +x ./vsplit.sh
-ln -s ./vsplit.sh /usr/local/bin/vsplit
+ln -s /absolute/path/vsplit.sh /usr/local/bin/vsplit
 ```
 
 ## Usage
