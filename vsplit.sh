@@ -1,36 +1,28 @@
 #!/usr/bin/env bash
 
 # -------------------------------------------------------------------------------------------------------------------
-# ABSOLUTE SCRIPT PATH
+# Script Absolute Path + Utils import
 # -------------------------------------------------------------------------------------------------------------------
 LINK=$(readlink $0)
-if [ -z "$LINK" ]; then
-  SCRIPTPATH=$0
-else
-  SCRIPTPATH=$LINK
-fi
+if [ -z "$LINK" ]; then SCRIPTPATH=$0; else SCRIPTPATH=$LINK; fi
 SCRIPTPATH="$(
   cd -- "$(dirname "$SCRIPTPATH")" >/dev/null 2>&1
   pwd -P
 )"
 
+source $SCRIPTPATH/utils.sh
+
 # -------------------------------------------------------------------------------------------------------------------
 # FUNCTIONS
 # -------------------------------------------------------------------------------------------------------------------
 function usage() {
-  echo "Usage: $0 [options] <input_file>"
+  echo "Usage: vsplit [options] <input_file>"
+  echo ""
   echo "options:"
   echo "-h     Print this Help."
   echo "-p     Number of parts to divide the input into. Optional (default 2)."
   echo "-o     Output Path (default the same dir of the input)."
-}
-
-function is_software_installed() {
-  if ! command -v $1 &>/dev/null; then
-    echo 0
-  else
-    echo 1
-  fi
+  echo ""
 }
 
 # -------------------------------------------------------------------------------------------------------------------
@@ -68,24 +60,65 @@ if [ ! -f "$INPUT" ]; then echo "Input file not found: $INPUT" && exit 1; fi
 if [ -z $OUTPUT ]; then OUTPUT=$(dirname "$INPUT"); fi
 if [ ! -d "$OUTPUT" ]; then echo "Output folder not found: $OUTPUT" && exit 1; fi
 
+# -------------------------------------------------------------------------------------------------------------------
+# EXECUTION
+# -------------------------------------------------------------------------------------------------------------------
+
+FILENAME=$(basename "$1")
+FILE_EXTENSION="${FILENAME##*.}"
+
 DURATION=$(ffmpeg -i "$INPUT" 2>&1 | grep Duration | awk '{print $2}' | tr -d ,)
 
-DURATION_SECONDS=$(echo "$DURATION" | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' | awk -F'.' '{print $1}')
+DURATION_SECONDS=$(timestring_to_seconds $DURATION)
 DURATION_CHUNK=$(printf '%.*f\n' 0 "$(($DURATION_SECONDS / $PARTS))")
 
-echo "Split Video in $PARTS chunks of duration: $DURATION_CHUNK seconds"
+INPUT_LINE=$(printf "Input Video,%s" "$FILENAME")
+TOTAL_LENGTH_LINE=$(printf "Total Duration,%s" $DURATION)
+PARTS_LINE=$(printf "Number of Chunks,%s" $PARTS)
+PARTS_DURATION_LINE=$(printf "Single Chunk Duration,%s" "$(seconds_to_timestring $DURATION_CHUNK)")
+OUTPUT_LINE=$(printf "Output Folder,%s" "$OUTPUT")
+
+TABLE_STRING=$(printf "%s\n%s\n%s\n%s\n%s" "$INPUT_LINE" "$TOTAL_LENGTH_LINE" "$PARTS_LINE" "$PARTS_DURATION_LINE" "$OUTPUT_LINE")
+
+clear
+
+TABLE=$(print_table "," "$TABLE_STRING")
+
+TABLE_FIRST_LINE=$(echo $TABLE | awk -F' ' '{print $1}')
+TABLE_FIRST_LINE_LENGTH=${#TABLE_FIRST_LINE}
+TITLE="VIDEO SPLITTER"
+TITLE_LENGTH=${#TITLE}
+
+SPACES=$((TABLE_FIRST_LINE_LENGTH - TITLE_LENGTH - 2))
+LEFT_SPACES="$((SPACES / 2))"
+RIGHT_SPACES=$((SPACES - LEFT_SPACES))
+
+printf "+%s+\n" "$(repeat_string "-" $((TABLE_FIRST_LINE_LENGTH - 2)))"
+printf "|%s%s%s|\n" "$(repeat_string " " $LEFT_SPACES)" "$TITLE" "$(repeat_string " " $RIGHT_SPACES)"
+printf "%s\n\n" "$TABLE"
+
+read -p "* Start Splitting Video? [y/N] " -n 1 -r
+echo ""
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+  echo "Aborted. Bye bye."
+  exit 0
+fi
 
 for i in $(seq 0 $((PARTS - 1))); do
+  echo ""
   FROM=$((i * DURATION_CHUNK))
   TO=$((FROM + DURATION_CHUNK))
 
-  FROM_FORMATTED=$(printf '%02d:%02d:%02d\n' $(($FROM / 3600)) $(($FROM % 3600 / 60)) $(($FROM % 60)))
-  TO_FORMATTED=$(printf '%02d:%02d:%02d\n' $(($TO / 3600)) $(($TO % 3600 / 60)) $(($TO % 60)))
+  FROM_FORMATTED=$(seconds_to_timestring $FROM)
+  TO_FORMATTED=$(seconds_to_timestring $TO)
 
-  OUTPUT_FILE=$(basename "$INPUT")
-  OUTPUT_EXT=$(echo $OUTPUT_FILE | awk -F'.' '{print $NF}')
-  OUTPUT_FILE="${OUTPUT_FILE%.*}__$((i + 1)).$OUTPUT_EXT"
+  FILENAME_NO_EXT="${FILENAME%.*}"
+  echo $FILENAME_NO_EXT
 
-  ffmpeg -v error -stats -ss $FROM_FORMATTED -i "$INPUT" -to $TO_FORMATTED -codec copy -avoid_negative_ts make_zero "$OUTPUT/$OUTPUT_FILE"
+  OUTPUT_FILE="${FILENAME_NO_EXT}__$((i + 1)).${FILE_EXTENSION}"
+
+  echo "[$FROM_FORMATTED - $TO_FORMATTED][$OUTPUT_FILE]"
+
+  # ffmpeg -v error -stats -ss $FROM_FORMATTED -i "$INPUT" -to $TO_FORMATTED -codec copy -avoid_negative_ts make_zero "$OUTPUT/$OUTPUT_FILE"
 
 done
