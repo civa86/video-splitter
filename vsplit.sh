@@ -119,6 +119,6 @@ for i in $(seq 0 $((PARTS - 1))); do
 
   echo "[$FROM_FORMATTED - $TO_FORMATTED][$OUTPUT_FILE]"
 
-  # ffmpeg -v error -stats -ss $FROM_FORMATTED -i "$INPUT" -to $TO_FORMATTED -codec copy -avoid_negative_ts make_zero "$OUTPUT/$OUTPUT_FILE"
+  ffmpeg -v error -stats -ss $FROM_FORMATTED -i "$INPUT" -to $TO_FORMATTED -codec copy -avoid_negative_ts make_zero "$OUTPUT/$OUTPUT_FILE"
 
 done
